@@ -7,7 +7,7 @@ local CONFIG = {
     interval    = 2,
 
     buyItems = {
-        Farm     = {"Library", "AntimatterReactor", "QuantumCoreGenerator"},
+        Farm     = {"Library"},
         House    = {},
         Military = {"MechStation"},
         Decor    = {},
