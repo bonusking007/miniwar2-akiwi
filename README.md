@@ -10,7 +10,7 @@ local CONFIG = {
         Farm     = {"Library"},
         House    = {},
         Military = {"MechStation"},
-        Decor    = {},
+        Decor    = {"WorkerStatue", "SoldierStatue"},
     },
 
     buyBMItems = {"GemMine", "CloneFacility", "CloneFacilityV2"},
