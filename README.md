@@ -1,7 +1,7 @@
 -- ===== CONFIG =====
 local CONFIG = {
     autoCollect = true,
-    autoSell    = true,
+    autoSell    = false,
     autoBuy     = true,
     autoBuyBM   = true,
     interval    = 2,
