@@ -9,7 +9,7 @@ local CONFIG = {
     buyItems = {
         Farm     = {"Library"},
         House    = {},
-        Military = {"MechStation"},
+        Military = {},
         Decor    = {"WorkerStatue", "SoldierStatue"},
     },
 
