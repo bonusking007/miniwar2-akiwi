@@ -4,7 +4,8 @@ local CONFIG = {
     autoSell    = false,
     autoBuy     = true,
     autoBuyBM   = true,
-    interval    = 2,
+    autoQuest   = true,
+    interval    = 3,
 
     buyItems = {
         Farm     = {"Library"},
@@ -49,6 +50,7 @@ local autoCollect = CONFIG.autoCollect
 local autoSell    = CONFIG.autoSell
 local autoBuy     = CONFIG.autoBuy
 local autoBuyBM   = CONFIG.autoBuyBM
+local autoQuest   = CONFIG.autoQuest
 
 local selectedItems = {
     Farm = {},
@@ -72,6 +74,10 @@ for _, name in ipairs(CONFIG.buyBMItems) do
 end
 
 -- ===== Helpers =====
+local function makeId(str)
+    return tostring(str):gsub("%W", "_")
+end
+
 local function getMyPlot()
     local map = workspace:FindFirstChild("MilitaryMap")
     if not map then return nil end
@@ -147,19 +153,39 @@ local function doBuy()
 end
 
 local function doBuyBM()
+    local itemsGrid = lp.PlayerGui.MainUI.Fullscreen.BlackMarketUI.ItemsGrid
+
     for itemName, selected in pairs(selectedBM) do
         if selected then
             pcall(function()
-                remote:FireServer({
-                    {
-                        item = itemName,
-                        shop = "BlackMarket"
-                    },
-                    "Z"
-                })
+                local item = itemsGrid:FindFirstChild(itemName)
+                local buyBtn = item and item:FindFirstChild("Buy")
+                if buyBtn then
+                    local conns = getconnections(buyBtn.MouseButton1Down)
+                    for _, conn in ipairs(conns) do
+                        pcall(conn.Function)
+                    end
+                end
             end)
             task.wait(0.15)
         end
+    end
+end
+
+local function doQuest()
+    local questList = lp.PlayerGui.MainUI.Fullscreen.QuestsUI.QuestList
+
+    for _, quest in ipairs(questList:GetChildren()) do
+        pcall(function()
+            local btnText = quest.Button.NameFrame.ButtonText
+            if btnText.Text == "Claim!" then
+                remote:FireServer({
+                    quest.Name,
+                    "`"
+                })
+            end
+        end)
+        task.wait(0.1)
     end
 end
 
@@ -181,12 +207,16 @@ task.spawn(function()
         if autoBuyBM then
             doBuyBM()
         end
+
+        if autoQuest then
+            doQuest()
+        end
     end
 end)
 
 -- ===== UI =====
 local Window = Fluent:CreateWindow({
-    Title = "Mini War",
+    Title = "Mini-War",
     SubTitle = "made by BatmanScript",
     TabWidth = 120,
     Size = UDim2.fromOffset(580, 460),
@@ -196,17 +226,16 @@ local Window = Fluent:CreateWindow({
 })
 
 local Tabs = {
-    Main        = Window:AddTab({ Title = "Main", Icon = "home" }),
-    Farm        = Window:AddTab({ Title = "Farm", Icon = "sprout" }),
-    House       = Window:AddTab({ Title = "House", Icon = "house" }),
-    Military    = Window:AddTab({ Title = "Military", Icon = "shield" }),
-    Decor       = Window:AddTab({ Title = "Decor", Icon = "flower-2" }),
+    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+    Farm = Window:AddTab({ Title = "Farm", Icon = "sprout" }),
+    House = Window:AddTab({ Title = "House", Icon = "house" }),
+    Military = Window:AddTab({ Title = "Military", Icon = "shield" }),
+    Decor = Window:AddTab({ Title = "Decor", Icon = "flower-2" }),
     BlackMarket = Window:AddTab({ Title = "Black Market", Icon = "store" }),
-    Settings    = Window:AddTab({ Title = "Settings", Icon = "settings" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" }),
 }
 
--- ===== Main Tab =====
-Tabs.Main:AddSection("Collect")
+Tabs.Main:AddSection("Auto")
 
 Tabs.Main:AddToggle("AutoCollect", {
     Title = "Auto Collect",
@@ -219,8 +248,6 @@ Tabs.Main:AddToggle("AutoCollect", {
     end
 })
 
-Tabs.Main:AddSection("Sell")
-
 Tabs.Main:AddToggle("AutoSell", {
     Title = "Auto Sell",
     Default = CONFIG.autoSell,
@@ -232,10 +259,8 @@ Tabs.Main:AddToggle("AutoSell", {
     end
 })
 
-Tabs.Main:AddSection("Buy")
-
 Tabs.Main:AddToggle("AutoBuy", {
-    Title = "Auto Buy",
+    Title = "Auto Buy Selected",
     Default = CONFIG.autoBuy,
     Callback = function(v)
         autoBuy = v
@@ -255,6 +280,19 @@ Tabs.Main:AddToggle("AutoBuyBM_Main", {
         end
     end
 })
+
+Tabs.Main:AddToggle("AutoQuest", {
+    Title = "Auto Claim Quest",
+    Default = CONFIG.autoQuest,
+    Callback = function(v)
+        autoQuest = v
+        if v then
+            task.spawn(doQuest)
+        end
+    end
+})
+
+Tabs.Main:AddSection("Manual")
 
 Tabs.Main:AddButton({
     Title = "Collect Now",
@@ -284,12 +322,19 @@ Tabs.Main:AddButton({
     end
 })
 
+Tabs.Main:AddButton({
+    Title = "Claim Quest Now",
+    Callback = function()
+        task.spawn(doQuest)
+    end
+})
+
 -- ===== Building Tabs =====
 local categories = {"Farm", "House", "Military", "Decor"}
 
 for _, cat in ipairs(categories) do
     local tab = Tabs[cat]
-    tab:AddSection("Selection Items")
+    tab:AddSection("Select Items")
 
     local items = {}
 
@@ -312,7 +357,7 @@ for _, cat in ipairs(categories) do
             selectedItems[cat][item.name] = false
         end
 
-        tab:AddToggle("toggle_" .. cat .. "_" .. item.name, {
+        tab:AddToggle("toggle_" .. cat .. "_" .. makeId(item.name), {
             Title = item.display,
             Description = "Price: " .. tostring(item.price),
             Default = selectedItems[cat][item.name] or false,
@@ -344,47 +389,44 @@ Tabs.BlackMarket:AddButton({
     end
 })
 
-Tabs.BlackMarket:AddSection("Selection Items")
+Tabs.BlackMarket:AddSection("Select Items")
 
 local bmItems = {}
+local addedBM = {}
+
+local function addBMItem(name, display)
+    if type(name) ~= "string" then return end
+    if addedBM[name] then return end
+
+    addedBM[name] = true
+
+    table.insert(bmItems, {
+        name = name,
+        display = display or name
+    })
+end
 
 for name, cfg in pairs(BuildingsConfig) do
     if type(cfg) == "table" and cfg.Type == "BlackMarket" then
-        table.insert(bmItems, {
-            name = name,
-            display = cfg.DisplayName or name
-        })
+        addBMItem(name, cfg.DisplayName or name)
     end
 end
 
-if #bmItems == 0 and ShopsConfig.BlackMarket then
-    for _, item in ipairs(ShopsConfig.BlackMarket) do
-        local itemName = item.name or item.Name or item.Item or item
-        if type(itemName) == "string" then
-            table.insert(bmItems, {
-                name = itemName,
-                display = itemName
-            })
+if ShopsConfig.BlackMarket then
+    for key, item in pairs(ShopsConfig.BlackMarket) do
+        if type(item) == "table" then
+            local itemName = item.name or item.Name or item.Item or item.item or key
+            addBMItem(itemName, item.DisplayName or item.displayName or itemName)
+        elseif type(item) == "string" then
+            addBMItem(item, item)
+        elseif type(key) == "string" then
+            addBMItem(key, key)
         end
     end
 end
 
-for name, selected in pairs(selectedBM) do
-    local exists = false
-
-    for _, item in ipairs(bmItems) do
-        if item.name == name then
-            exists = true
-            break
-        end
-    end
-
-    if not exists then
-        table.insert(bmItems, {
-            name = name,
-            display = name
-        })
-    end
+for name in pairs(selectedBM) do
+    addBMItem(name, name)
 end
 
 table.sort(bmItems, function(a, b)
@@ -396,7 +438,7 @@ for _, item in ipairs(bmItems) do
         selectedBM[item.name] = false
     end
 
-    Tabs.BlackMarket:AddToggle("toggle_BM_" .. item.name, {
+    Tabs.BlackMarket:AddToggle("toggle_BM_" .. makeId(item.name), {
         Title = item.display,
         Default = selectedBM[item.name] or false,
         Callback = function(v)
