@@ -14,7 +14,7 @@ local CONFIG = {
         Decor    = {"WorkerStatue", "SoldierStatue"},
     },
 
-    buyBMItems = {"GemMine", "CloneFacility", "CloneFacilityV2"},
+    buyBMItems = {"GemMine", "CloneFacilityV2"},
 }
 -- ==================
 
